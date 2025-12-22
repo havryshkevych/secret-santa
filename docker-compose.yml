@@ -5,7 +5,6 @@ services:
       - .:/app
     env_file: .env
     working_dir: /app
-    container_name: secret_santa_app
 
   nginx:
     image: nginx:alpine
@@ -16,7 +15,6 @@ services:
       - .:/app
     depends_on:
       - app
-    container_name: secret_santa_nginx
 
   db:
     image: postgres:16
@@ -26,7 +24,6 @@ services:
       POSTGRES_PASSWORD: password
     volumes:
       - db_data:/var/lib/postgresql/data
-    container_name: secret_santa_db
 
   bot:
     build: .
@@ -37,7 +34,6 @@ services:
     depends_on:
       - app
       - db
-    container_name: secret_santa_bot
 
 volumes:
   db_data:
