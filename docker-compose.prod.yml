@@ -1,0 +1,36 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      - APP_ENV=production
+      - APP_DEBUG=false
+    volumes:
+      - storage_data:/app/storage
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - .:/app
+    depends_on:
+      - app
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: php artisan telegram:run
+    restart: always
+    depends_on:
+      - app
+    volumes:
+      - storage_data:/app/storage
+
+volumes:
+  storage_data:
