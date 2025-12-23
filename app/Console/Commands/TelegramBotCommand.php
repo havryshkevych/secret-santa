@@ -38,9 +38,12 @@ class TelegramBotCommand extends Command
 
         while (true) {
             try {
-                $response = Http::get("https://api.telegram.org/bot{$this->token}/getUpdates", [
+                // Heartbeat for health checking
+                Cache::put('telegram_bot_last_seen', now()->toDateTimeString(), 60);
+
+                $response = Http::timeout(60)->get("https://api.telegram.org/bot{$this->token}/getUpdates", [
                     'offset' => $this->offset,
-                    'timeout' => 30,
+                    'timeout' => 30, // Telegram side long polling timeout
                 ]);
 
                 if ($response->successful()) {
@@ -51,8 +54,11 @@ class TelegramBotCommand extends Command
                     }
                 }
             } catch (\Exception $e) {
-                $this->error('Error: ' . $e->getMessage());
-                sleep(5);
+                // Ignore client-side timeouts to avoid cluttered logs
+                if (!str_contains($e->getMessage(), 'timed out')) {
+                    $this->error('Error: ' . $e->getMessage());
+                    sleep(5);
+                }
             }
             usleep(100000); // 100ms
         }

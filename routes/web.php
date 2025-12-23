@@ -9,6 +9,14 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
+Route::get('/health/bot', function () {
+    $lastSeen = \Illuminate\Support\Facades\Cache::get('telegram_bot_last_seen');
+    if ($lastSeen && \Carbon\Carbon::parse($lastSeen)->diffInMinutes(now()) < 5) {
+        return response()->json(['status' => 'ok', 'last_seen' => $lastSeen]);
+    }
+    return response()->json(['status' => 'error', 'last_seen' => $lastSeen], 503);
+});
+
 Route::get('/new', [GameController::class, 'create'])->name('game.create');
 Route::post('/game', [GameController::class, 'store'])->name('game.store');
 
