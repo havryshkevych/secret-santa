@@ -2,10 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Assignment;
 use App\Models\Game;
 use App\Models\Participant;
-use App\Models\Assignment;
-use Illuminate\Http\Request;
 
 class AdminController extends Controller
 {
@@ -28,6 +27,7 @@ class AdminController extends Controller
     public function destroyGame(Game $game)
     {
         $game->delete();
+
         return back()->with('status', 'Game deleted successfully.');
     }
 }

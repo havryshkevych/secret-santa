@@ -4,17 +4,49 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{{ config('app.name', 'Secret Santa') }}</title>
-    <meta name="description" content="Організуй ідеальний обмін подарунками Secret Santa. Створюй групи, додавай обмеження та отримуй сповіщення в Telegram.">
+    <meta name="description" content="{{ __('app.meta_description') }}">
     
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Mountains+of+Christmas:wght@400;700&family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Marck+Script&family=Mountains+of+Christmas:wght@400;700&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
     
     <!-- Tailwind via CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
     <script>
+        // Telegram Web App Auto-Login
+        document.addEventListener('DOMContentLoaded', function() {
+                if (window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData) {
+                window.Telegram.WebApp.expand();
+                const initData = window.Telegram.WebApp.initData;
+                
+                // Only try to login if not already logged in
+                @guest
+                    fetch('{{ route("login.telegram.webapp") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                        },
+                        body: JSON.stringify({ initData: initData })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            window.location.reload();
+                        }
+                    })
+                    .catch(error => console.error('Telegram WebApp login error:', error));
+                @endguest
+                
+                // Inform the app that we are in a Mini App
+                document.body.classList.add('is-mini-app');
+            }
+        });
+
         tailwind.config = {
             theme: {
                 extend: {
@@ -29,8 +61,9 @@
                         }
                     },
                     fontFamily: {
-                        display: ['"Mountains of Christmas"', 'cursive'],
-                        body: ['"Outfit"', 'sans-serif'],
+                        display: ['"Marck Script"', 'cursive'],
+                        body: ['"Nunito"', 'sans-serif'],
+                        santa: ['"Mountains of Christmas"', 'cursive'],
                     }
                 }
             }
@@ -109,6 +142,32 @@
         .b-page_newyear .b-head-decor__inner_n6{left:1865px}
         .b-page_newyear .b-head-decor__inner_n7{left:2238px}
 
+        /* Scale garland for mobile / mini app */
+        /* Scale garland for mobile / mini app */
+        @media (max-width: 640px) {
+            .b-page_newyear .b-head-decor {
+                overflow: visible;
+                height: 57px; /* Half of original 115px */
+                background-size: auto 57px; /* Scale background image height to 50% */
+            }
+            .b-page_newyear .b-head-decor__inner {
+                transform: scale(0.5); /* Smaller scale for mobile */
+                transform-origin: 0 0;
+            }
+            /* Adjust positions for scaled elements to prevent gaps */
+            .b-page_newyear .b-head-decor__inner_n2{left:186.5px}  /* 373 * 0.5 */
+            .b-page_newyear .b-head-decor__inner_n3{left:373px}    /* 746 * 0.5 */
+            .b-page_newyear .b-head-decor__inner_n4{left:559.5px}  /* 1119 * 0.5 */
+            .b-page_newyear .b-head-decor__inner_n5{left:746px}    /* 1492 * 0.5 */
+            .b-page_newyear .b-head-decor__inner_n6{left:932.5px}  /* 1865 * 0.5 */
+            .b-page_newyear .b-head-decor__inner_n7{left:1119px}   /* 2238 * 0.5 */
+        }
+        
+        .is-mini-app .b-head-decor {
+            opacity: 0.8;
+            pointer-events: none; /* Don't interfere with top buttons */
+        }
+
         .b-ball{position:absolute}
         .b-ball_n1{top:0;left:3px;width:59px;height:83px}
         .b-ball_n2{top:-19px;left:51px;width:55px;height:70px}
@@ -159,9 +218,67 @@
         .b-ball_bounce .b-ball__right.bounce2+.b-ball__i{transform:rotate(3deg)}
         .b-ball_bounce.bounce3>.b-ball__i{transform:rotate(1.5deg)}
         .b-ball_bounce .b-ball__right.bounce3+.b-ball__i{transform:rotate(-1.5deg)}
+
+        /* Hide specific elements in Telegram Mini App */
+        .is-mini-app .tg-login-section {
+            display: none;
+        }
+
+        .is-mini-app {
+            padding-top: 5rem !important;
+            padding-bottom: 1rem !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        .is-mini-app .app-wrapper {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+
+        .is-mini-app .snow-card {
+            padding: 0.75rem !important;
+            width: 100% !important;
+        }
+        
+        @media (max-width: 640px) {
+            .is-mini-app header {
+                margin-bottom: 1rem !important;
+            }
+            .snow-card {
+                padding: 1.5rem !important;
+                border-radius: 1rem !important;
+            }
+        }
     </style>
 </head>
-<body class="font-body min-h-screen flex items-center justify-center p-4 pt-24">
+<body class="font-body min-h-screen flex items-center justify-center p-4 pt-32">
+
+    @if(!session('locale') && (!auth()->check() || !auth()->user()->language))
+    <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" id="language-modal">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full text-center relative overflow-hidden">
+             <!-- Decorative elements -->
+            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-santa-red to-santa-green"></div>
+            
+            <h2 class="font-santa text-3xl mb-2 text-santa-dark">Welcome!</h2>
+            <p class="text-gray-600 mb-8 font-body">Please choose your language<br>Будь ласка, оберіть мову</p>
+            
+            <div class="space-y-4">
+                 <a href="{{ route('locale.switch', 'en') }}" class="block w-full py-4 rounded-xl border-2 border-santa-mist hover:border-santa-red hover:bg-santa-snow transition-all group">
+                    <div class="text-2xl mb-1">🇬🇧</div>
+                    <div class="font-bold text-santa-dark group-hover:text-santa-red">English</div>
+                </a>
+                
+                <a href="{{ route('locale.switch', 'uk') }}" class="block w-full py-4 rounded-xl border-2 border-santa-mist hover:border-santa-green hover:bg-santa-snow transition-all group">
+                    <div class="text-2xl mb-1">🇺🇦</div>
+                    <div class="font-bold text-santa-dark group-hover:text-santa-green">Українська</div>
+                </a>
+            </div>
+        </div>
+    </div>
+    @endif
 
     <!-- New Year Garland -->
     <div class="b-page_newyear">
@@ -308,12 +425,12 @@
         }
     </script>
 
-    <div class="relative z-10 w-full max-w-4xl mx-auto">
-        <header class="text-center mb-10">
-            <div class="font-display text-5xl md:text-7xl text-santa-gold text-glow-gold drop-shadow-lg">
+    <div class="app-wrapper relative z-10 w-full max-w-4xl mx-auto px-2 sm:px-4">
+        <header class="text-center mb-6 md:mb-10">
+            <div class="font-santa text-4xl sm:text-5xl md:text-7xl text-santa-gold text-glow-gold drop-shadow-lg">
                 <a href="{{ route('home') }}">{{ config('app.name', 'Secret Santa') }}</a>
             </div>
-            <p class="text-santa-mist text-lg mt-2 opacity-90">Організуй святковий обмін подарунками — легко та весело! 🎅</p>
+            <p class="text-santa-mist text-sm sm:text-base md:text-lg mt-2 opacity-90 px-4">{{ __('app.header_subtitle') }}</p>
         </header>
 
         <main class="snow-card p-6 md:p-10 shadow-2xl relative overflow-visible">
@@ -332,10 +449,18 @@
         </main>
 
         <footer class="mt-12 text-center text-santa-mist text-sm opacity-60">
-            <p>&copy; {{ date('Y') }} Secret Santa. Зроблено з ❤️</p>
-            <div class="mt-2 text-xs flex justify-center gap-4">
-                <span>Laravel & Docker</span>
-                <a href="{{ route('admin.index') }}" class="hover:underline hover:text-santa-gold transition-colors">Адмінка</a>
+            <p>&copy; {{ date('Y') }} Secret Santa. {{ __('app.footer_made_with') }}</p>
+            <div class="mt-2 text-xs flex justify-center gap-4 items-center">
+                @if(auth()->check() && auth()->user()->is_admin)
+                    <a href="{{ route('admin.index') }}" class="hover:underline hover:text-santa-gold transition-colors">Admin</a>
+                    <span class="opacity-50">|</span>
+                @endif
+                
+                <div class="flex gap-3">
+                    <a href="{{ route('locale.switch', 'en') }}" class="{{ app()->getLocale() === 'en' ? 'text-santa-gold font-bold' : 'hover:text-santa-gold transition-colors' }}">EN</a>
+                    <span class="opacity-50">/</span>
+                    <a href="{{ route('locale.switch', 'uk') }}" class="{{ app()->getLocale() === 'uk' ? 'text-santa-gold font-bold' : 'hover:text-santa-gold transition-colors' }}">UA</a>
+                </div>
             </div>
         </footer>
     </div>
@@ -370,6 +495,7 @@
         document.querySelectorAll('.b-ball_bounce .b-ball__right').forEach(right => {
             right.addEventListener('mouseenter', function() { ballBounce(this.parentElement); });
         });
+
     </script>
 </body>
 </html>
