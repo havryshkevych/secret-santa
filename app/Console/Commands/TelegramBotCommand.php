@@ -44,8 +44,17 @@ class TelegramBotCommand extends Command
                 if ($response->successful()) {
                     $updates = $response->json('result', []);
                     foreach ($updates as $update) {
-                        $this->processUpdate($update);
-                        $this->offset = $update['update_id'] + 1;
+                        try {
+                            $this->processUpdate($update);
+                        } catch (\Exception $e) {
+                            \Log::error("Error processing update", [
+                                'update_id' => $update['update_id'] ?? 'unknown',
+                                'error' => $e->getMessage()
+                            ]);
+                        } finally {
+                            // ALWAYS increment offset, even if there was an error
+                            $this->offset = $update['update_id'] + 1;
+                        }
                     }
                 }
             } catch (\Exception $e) {
@@ -1511,16 +1520,29 @@ class TelegramBotCommand extends Command
 
     private function handleJoinGame($chatId, $username, $payload)
     {
-        // Extract join token from payload (format: join_TOKEN)
-        $joinToken = str_replace('join_', '', $payload);
+        try {
+            \Log::info("handleJoinGame called", ['chatId' => $chatId, 'payload' => $payload]);
 
-        if (empty($joinToken)) {
-            $this->handleStart($chatId, $username);
-            return;
-        }
+            // Extract join token from payload (format: join_TOKEN)
+            $joinToken = str_replace('join_', '', $payload);
 
-        // Find game by join token
-        $game = Game::where('join_token', $joinToken)->first();
+            if (empty($joinToken)) {
+                $this->handleStart($chatId, $username);
+                return;
+            }
+
+            // Check if we've already processed this join request (prevent duplicates)
+            $cacheKey = "bot_join_processed_{$chatId}_{$joinToken}";
+            if (Cache::has($cacheKey)) {
+                \Log::info("Join request already processed, skipping", ['chatId' => $chatId, 'joinToken' => $joinToken]);
+                return;
+            }
+
+            // Mark this join request as processed (TTL: 60 seconds)
+            Cache::put($cacheKey, true, 60);
+
+            // Find game by join token
+            $game = Game::where('join_token', $joinToken)->first();
 
         if (!$game) {
             $this->sendMessage($chatId, __('bot.game_not_found'));
@@ -1541,8 +1563,29 @@ class TelegramBotCommand extends Command
             ->first();
 
         if ($existing) {
-            $this->sendMessage($chatId, __('game.already_joined'));
-            $this->handleStart($chatId, $username);
+            $gameTitle = $game->title ?? 'Secret Santa';
+            $msg = "✅ " . __('bot.game.already_participant') . "\n\n";
+            $msg .= "🎮 *" . $gameTitle . "*\n\n";
+
+            if ($game->is_started && $existing->assignmentAsSanta) {
+                $msg .= __('bot.game.can_view_recipient');
+            } else {
+                $msg .= __('bot.game.waiting_for_start');
+            }
+
+            // Add WebApp button to open game
+            $inlineKeyboard = [
+                'inline_keyboard' => [
+                    [
+                        ['text' => __('bot.btn.open_game'), 'web_app' => ['url' => route('game.join', $game->join_token)]]
+                    ]
+                ]
+            ];
+
+            $this->sendMessage($chatId, $msg, $inlineKeyboard);
+
+            // Send main menu in a separate message to avoid conflicts
+            $this->sendMessage($chatId, __('bot.back_to_menu'), $this->getMainMenu());
             return;
         }
 
@@ -1573,8 +1616,30 @@ class TelegramBotCommand extends Command
 
         $gameTitle = $game->title ?? 'Secret Santa';
         $msg = "🎉 " . __('game.joined_successfully') . "\n\n";
-        $msg .= "🎮 " . __('bot.game.notification', ['title' => $gameTitle]);
+        $msg .= "🎮 *" . $gameTitle . "*\n\n";
+        $msg .= __('bot.game.joined_info');
 
-        $this->sendMessage($chatId, $msg, $this->getMainMenu());
+        // Add WebApp button to open game
+        $keyboard = [
+            'inline_keyboard' => [
+                [
+                    ['text' => __('bot.btn.open_game'), 'web_app' => ['url' => route('game.join', $game->join_token)]]
+                ]
+            ]
+        ];
+
+        $this->sendMessage($chatId, $msg, $keyboard);
+
+        // Send main menu in a separate message
+        $this->sendMessage($chatId, __('bot.back_to_menu'), $this->getMainMenu());
+
+        } catch (\Exception $e) {
+            \Log::error("Error in handleJoinGame", [
+                'chatId' => $chatId,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            // Silently log the error, don't spam the user
+        }
     }
 }

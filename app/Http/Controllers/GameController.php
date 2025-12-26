@@ -203,9 +203,16 @@ class GameController extends Controller
                     'recipient_id' => $recipient->id,
                 ]);
             }
+
+            // Mark game as started
+            $game->is_started = true;
+            $game->save();
         });
 
-        return redirect()->route('game.result', $game->id);
+        // Automatically notify all participants
+        $this->sendNotificationsToParticipants($game);
+
+        return redirect()->route('game.result', $game->id)->with('status', __('game.pairs_generated_and_notified'));
     }
 
     public function result(Game $game)
@@ -353,9 +360,19 @@ class GameController extends Controller
             return back()->withErrors(['error' => __('game.game_not_started')]);
         }
 
+        $result = $this->sendNotificationsToParticipants($game);
+
+        return back()->with('status', __('game.players_notified', [
+            'count' => $result['count'],
+            'total' => $result['total']
+        ]));
+    }
+
+    private function sendNotificationsToParticipants(Game $game)
+    {
         $botToken = config('services.telegram.bot_token');
         if (!$botToken) {
-            return back()->withErrors(['error' => 'Telegram bot token not configured']);
+            return ['count' => 0, 'total' => 0];
         }
 
         $count = 0;
@@ -385,10 +402,17 @@ class GameController extends Controller
                 'token' => $token
             ]);
 
+            // Set locale for this participant
+            $locale = $participant->language ?? 'uk';
+            $prevLocale = app()->getLocale();
+            app()->setLocale($locale);
+
             $gameTitle = str_replace('_', '\\_', $game->title ?? 'Secret Santa');
-            $msg = "Привіт! 🎅\n\n".
-                   "Нагадування про гру «*{$gameTitle}*»!\n\n".
-                   "Натисни кнопку нижче, щоб переглянути кому ти даруєш подарунок:";
+            $gameDesc = $game->description ? "\n\n📋 " . str_replace('_', '\\_', $game->description) : '';
+
+            $msg = "🎉 " . __('bot.game.pairs_generated') . "\n\n".
+                   "🎮 *{$gameTitle}*{$gameDesc}\n\n".
+                   __('bot.game.click_to_reveal');
 
             \Illuminate\Support\Facades\Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", [
                 'chat_id' => $participant->telegram_chat_id,
@@ -397,16 +421,19 @@ class GameController extends Controller
                 'reply_markup' => [
                     'inline_keyboard' => [
                         [
-                            ['text' => '🎁 Відкрити результат', 'web_app' => ['url' => $link]],
+                            ['text' => __('bot.btn.reveal_recipient'), 'web_app' => ['url' => $link]],
                         ],
                     ],
                 ],
             ]);
 
+            // Restore previous locale
+            app()->setLocale($prevLocale);
+
             $count++;
         }
 
-        return back()->with('status', __('game.players_notified', ['count' => $count, 'total' => $total]));
+        return ['count' => $count, 'total' => $total];
     }
 
     public function myGames()

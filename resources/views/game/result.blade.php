@@ -61,8 +61,25 @@
             @foreach($game->participants as $participant)
                 <div class="p-6 hover:bg-gray-50 transition-colors group">
                     <div class="flex flex-col gap-3">
-                        <div>
-                            <h3 class="text-lg font-bold text-gray-900 mb-3">{{ $participant->name }}</h3>
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-2">
+                                <h3 class="text-lg font-bold text-gray-900">{{ $participant->name }}</h3>
+                                @if($participant->telegram_chat_id)
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800" title="{{ __('result.has_telegram') }}">
+                                        <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                            <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
+                                        </svg>
+                                        Telegram
+                                    </span>
+                                @else
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800" title="{{ __('result.no_telegram') }}">
+                                        <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                        </svg>
+                                        {{ __('result.send_manually') }}
+                                    </span>
+                                @endif
+                            </div>
                         </div>
 
                         @if($participant->reveal_token)

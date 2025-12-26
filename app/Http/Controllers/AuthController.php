@@ -29,6 +29,7 @@ class AuthController extends Controller
             return response()->json(['success' => false, 'message' => 'No initData provided.'], 400);
         }
 
+        $auth_data = [];
         if ($this->checkWebAppAuthorization($initData, $auth_data)) {
             $user = $this->loginWithTelegramData($auth_data);
 

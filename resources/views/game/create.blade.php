@@ -31,8 +31,8 @@
         </div>
 
         <div class="flex justify-end">
-            <button type="submit" class="btn-primary px-6 py-2 rounded-lg font-semibold flex items-center">
-                {{ __('game.next_constraints') }} <span class="ml-2">&rarr;</span>
+            <button type="submit" class="bg-santa-green hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold flex items-center shadow-lg transition-all">
+                {{ __('game.create_game_button') }} <span class="ml-2">🎄</span>
             </button>
         </div>
     </form>
