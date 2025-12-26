@@ -4,9 +4,14 @@
 <div class="py-4">
     <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-8">
         <h1 class="text-3xl font-display text-santa-dark text-center sm:text-left">{{ __('game.my_games_title') }}</h1>
-        <a href="{{ route('game.create') }}" class="btn-primary px-6 py-2 rounded-full font-semibold shadow text-sm w-full sm:w-auto text-center">
-            🎁 {{ __('game.btn_new_game') }}
-        </a>
+        <div class="flex gap-3 w-full sm:w-auto">
+            <a href="{{ route('game.myWishlist') }}" class="flex-1 sm:flex-initial bg-santa-green text-white px-6 py-2 rounded-full font-semibold shadow text-sm text-center hover:opacity-90 transition-opacity">
+                ⚙️ {{ __('wishlist.my_wishlist_title') }}
+            </a>
+            <a href="{{ route('game.create') }}" class="flex-1 sm:flex-initial btn-primary px-6 py-2 rounded-full font-semibold shadow text-sm text-center">
+                🎁 {{ __('game.btn_new_game') }}
+            </a>
+        </div>
     </div>
 
     @if($organizedGames->isEmpty() && $participations->isEmpty())
@@ -37,6 +42,13 @@
                             <a href="{{ route('game.edit', $game->id) }}" class="px-4 py-2 bg-santa-gold text-white rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity text-center">
                                 {{ __('game.btn_settings') }}
                             </a>
+                            <form action="{{ route('game.destroy', $game->id) }}" method="POST" onsubmit="return confirm('{{ __('game.confirm_delete') }}');">
+                                @csrf
+                                @method('DELETE')
+                                <button type="submit" class="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-semibold hover:bg-red-600 transition-colors text-center w-full">
+                                    {{ __('game.btn_delete') }}
+                                </button>
+                            </form>
                         </div>
                     </div>
                 @endforeach

@@ -19,21 +19,20 @@
             <a href="{{ route('game.myGames') }}" class="btn-primary inline-flex items-center px-8 py-3 rounded-full text-lg font-semibold shadow-lg">
                 <span class="mr-2">🎮</span> {{ __('welcome.my_games_btn') }}
             </a>
+            <a href="{{ route('game.myWishlist') }}" class="bg-santa-green text-white inline-flex items-center px-8 py-3 rounded-full text-lg font-semibold shadow-lg hover:opacity-90 transition-opacity">
+                <span class="mr-2">⚙️</span> {{ __('wishlist.my_wishlist_title') }}
+            </a>
             <a href="{{ route('game.create') }}" class="bg-santa-gold text-white inline-flex items-center px-8 py-3 rounded-full text-lg font-semibold shadow-lg hover:opacity-90 transition-opacity">
                 <span class="mr-2">🎁</span> {{ __('welcome.start_new_game_btn') }}
             </a>
         </div>
     @else
         <div class="mb-12 flex flex-col items-center tg-login-section">
-            <a href="{{ route('game.create') }}" class="btn-primary inline-flex items-center px-8 py-3 rounded-full text-lg font-semibold shadow-lg mb-6 transform hover:scale-105 transition-transform">
-                <span class="mr-2">🎁</span> {{ __('welcome.start_new_game_btn') }}
-            </a>
-            
             <p class="text-gray-500 text-sm mb-4">{{ __('welcome.auth_prompt') }}</p>
-            <script async src="https://telegram.org/js/telegram-widget.js?22" 
-                data-telegram-login="{{ env('TELEGRAM_BOT_USERNAME', 'little_santa_bot') }}" 
-                data-size="large" 
-                data-auth-url="{{ route('login.telegram') }}" 
+            <script async src="https://telegram.org/js/telegram-widget.js?22"
+                data-telegram-login="{{ env('TELEGRAM_BOT_USERNAME', 'little_santa_bot') }}"
+                data-size="large"
+                data-auth-url="{{ route('login.telegram') }}"
                 data-request-access="write"></script>
         </div>
     @endauth
@@ -124,11 +123,13 @@
     </div>
 
     <!-- CTA -->
-    <div class="mt-12 pt-8">
-        <a href="{{ route('game.create') }}" class="btn-primary inline-flex items-center px-10 py-4 rounded-full text-xl font-bold shadow-xl transform hover:scale-105 transition-transform">
-            <span class="mr-3">🎅</span> {{ __('welcome.cta_button') }}
-        </a>
-        <p class="text-gray-500 text-sm mt-4">{{ __('welcome.cta_text') }}</p>
-    </div>
+    @auth
+        <div class="mt-12 pt-8">
+            <a href="{{ route('game.create') }}" class="btn-primary inline-flex items-center px-10 py-4 rounded-full text-xl font-bold shadow-xl transform hover:scale-105 transition-transform">
+                <span class="mr-3">🎅</span> {{ __('welcome.cta_button') }}
+            </a>
+            <p class="text-gray-500 text-sm mt-4">{{ __('welcome.cta_text') }}</p>
+        </div>
+    @endauth
 </div>
 @endsection

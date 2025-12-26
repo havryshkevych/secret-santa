@@ -49,4 +49,18 @@ class Game extends Model
     {
         return $this->hasMany(Assignment::class);
     }
+
+    /**
+     * Get Telegram Mini App join link for this game
+     */
+    public function getTelegramJoinLink(): string
+    {
+        $botUsername = config('services.telegram.bot_username', env('TELEGRAM_BOT_USERNAME', 'little_santa_bot'));
+        // Remove @ if present
+        $botUsername = ltrim($botUsername, '@');
+
+        // Format: https://t.me/bot_username?start=join_TOKEN
+        // This will open the bot and pass the join token as a start parameter
+        return "https://t.me/{$botUsername}?start=join_{$this->join_token}";
+    }
 }

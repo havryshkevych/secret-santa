@@ -27,12 +27,16 @@ Route::post('/game/{game}/constraints', [GameController::class, 'storeConstraint
 
 Route::get('/game/join/{token}', [GameController::class, 'showJoin'])->name('game.join');
 Route::post('/game/join/{token}', [GameController::class, 'join'])->name('game.join.post');
+Route::delete('/game/{game}/leave', [GameController::class, 'leaveGame'])->name('game.leave');
 
 Route::get('/game/{game}/assign', [GameController::class, 'assign'])->name('game.assign');
 Route::get('/game/{game}/edit', [GameController::class, 'edit'])->name('game.edit');
 Route::patch('/game/{game}', [GameController::class, 'update'])->name('game.update');
+Route::post('/game/{game}/add-participant', [GameController::class, 'addParticipant'])->name('game.addParticipant');
+Route::delete('/game/{game}', [GameController::class, 'destroy'])->name('game.destroy');
 Route::get('/game/{game}/result', [GameController::class, 'result'])->name('game.result');
 Route::post('/game/{game}/start', [GameController::class, 'startGame'])->name('game.start');
+Route::post('/game/{game}/notify', [GameController::class, 'notifyPlayers'])->name('game.notifyPlayers');
 
 Route::get('/reveal/{gameId}/{participantId}/{token}', [RevealController::class, 'show'])->name('reveal.show');
 Route::post('/reveal/{gameId}/{participantId}/{token}/wishlist', [RevealController::class, 'updateWishlist'])->name('wishlist.update');
@@ -48,6 +52,8 @@ Route::prefix('admin')->name('admin.')->middleware(['auth', 'admin'])->group(fun
 });
 
 Route::get('/my-games', [GameController::class, 'myGames'])->name('game.myGames')->middleware('auth');
+Route::get('/my-wishlist', [GameController::class, 'myWishlist'])->name('game.myWishlist')->middleware('auth');
+Route::post('/my-wishlist', [GameController::class, 'updateMyWishlist'])->name('game.updateMyWishlist')->middleware('auth');
 
 Route::get('/locale/{lang}', function ($lang) {
     if (in_array($lang, ['en', 'uk'])) {

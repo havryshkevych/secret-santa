@@ -42,8 +42,8 @@
         </div>
 
         <div class="flex justify-between items-center">
-            <a href="{{ route('game.create') }}" class="text-gray-500 hover:text-santa-dark underline text-sm">{{ __('constraints.back_btn') }}</a>
-            <button type="submit" class="btn-primary px-8 py-3 rounded-lg font-semibold flex items-center shadow-lg">
+            <a href="{{ route('game.edit', $game->id) }}" class="text-gray-500 hover:text-santa-dark underline text-sm">{{ __('constraints.back_btn') }}</a>
+            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-semibold flex items-center shadow-lg transition-colors">
                 {{ __('constraints.generate_btn') }} <span class="ml-2">🎲</span>
             </button>
         </div>

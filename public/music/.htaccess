@@ -1,0 +1,9 @@
+# Cache audio files for 1 year
+<IfModule mod_headers.c>
+    Header set Cache-Control "public, max-age=31536000, immutable"
+</IfModule>
+
+# Enable gzip compression for audio files
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE audio/mpeg
+</IfModule>

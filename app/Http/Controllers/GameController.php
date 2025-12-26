@@ -210,6 +210,15 @@ class GameController extends Controller
 
     public function result(Game $game)
     {
+        // Check authorization - only game organizer can see results
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Please log in to view game results');
+        }
+
+        if (!$this->isGameOrganizer($game)) {
+            abort(403, 'Only the game organizer can view game results');
+        }
+
         // Need to show PINs ONLY IF just generated (session flash).
         // If reloading, we shouldn't show PINs again for security? PRD says "Organizer copies...".
         // If organizer closes tab, they are lost?
@@ -265,7 +274,8 @@ class GameController extends Controller
         }
 
         // Check if user created the game via bot (telegram_id match)
-        if ($game->organizer_chat_id && $user->telegram_id && $game->organizer_chat_id === $user->telegram_id) {
+        // Use loose equality (==) because organizer_chat_id is bigInteger and telegram_id is string
+        if ($game->organizer_chat_id && $user->telegram_id && $game->organizer_chat_id == $user->telegram_id) {
             return true;
         }
 
@@ -291,6 +301,114 @@ class GameController extends Controller
         return redirect()->route('game.myGames')->with('status', 'Дані гри оновлено!');
     }
 
+    public function addParticipant(Request $request, Game $game)
+    {
+        // Check authorization
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Please log in to add participants');
+        }
+
+        if (!$this->isGameOrganizer($game)) {
+            abort(403, 'Only the game organizer can add participants');
+        }
+
+        // Cannot add participants after game has started
+        if ($game->is_started) {
+            return back()->withErrors(['error' => __('game.cannot_add_after_start')]);
+        }
+
+        $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
+
+        // Create participant without Telegram info
+        $participant = Participant::create([
+            'game_id' => $game->id,
+            'name' => $request->input('name'),
+            'reveal_token' => \Illuminate\Support\Str::uuid(),
+            // telegram_chat_id and telegram_username are NULL
+        ]);
+
+        return back()->with('status', __('game.participant_added'));
+    }
+
+    public function destroy(Game $game)
+    {
+        if (!$this->isGameOrganizer($game)) {
+            abort(403, 'Only the game organizer can delete this game');
+        }
+
+        $game->delete();
+
+        return redirect()->route('game.myGames')->with('status', __('game.game_deleted'));
+    }
+
+    public function notifyPlayers(Game $game)
+    {
+        if (!$this->isGameOrganizer($game)) {
+            abort(403, 'Only the game organizer can notify players');
+        }
+
+        if (!$game->is_started) {
+            return back()->withErrors(['error' => __('game.game_not_started')]);
+        }
+
+        $botToken = config('services.telegram.bot_token');
+        if (!$botToken) {
+            return back()->withErrors(['error' => 'Telegram bot token not configured']);
+        }
+
+        $count = 0;
+        $total = 0;
+
+        foreach ($game->participants as $participant) {
+            $total++;
+
+            if (!$participant->telegram_chat_id) {
+                continue;
+            }
+
+            $assignment = $participant->assignmentAsSanta;
+            if (!$assignment) {
+                continue;
+            }
+
+            $token = $participant->reveal_token;
+            if (!$token) {
+                $token = bin2hex(random_bytes(16));
+                $participant->update(['reveal_token' => $token]);
+            }
+
+            $link = route('reveal.show', [
+                'gameId' => $game->id,
+                'participantId' => $participant->id,
+                'token' => $token
+            ]);
+
+            $gameTitle = str_replace('_', '\\_', $game->title ?? 'Secret Santa');
+            $msg = "Привіт! 🎅\n\n".
+                   "Нагадування про гру «*{$gameTitle}*»!\n\n".
+                   "Натисни кнопку нижче, щоб переглянути кому ти даруєш подарунок:";
+
+            \Illuminate\Support\Facades\Http::post("https://api.telegram.org/bot{$botToken}/sendMessage", [
+                'chat_id' => $participant->telegram_chat_id,
+                'text' => $msg,
+                'parse_mode' => 'Markdown',
+                'reply_markup' => [
+                    'inline_keyboard' => [
+                        [
+                            ['text' => '🎁 Відкрити результат', 'web_app' => ['url' => $link]],
+                        ],
+                    ],
+                ],
+            ]);
+
+            $count++;
+        }
+
+        return back()->with('status', __('game.players_notified', ['count' => $count, 'total' => $total]));
+    }
+
     public function myGames()
     {
         $user = auth()->user();
@@ -304,13 +422,81 @@ class GameController extends Controller
         }
 
         $participations = [];
-        if ($user->telegram_id) {
-            $participations = Participant::where('telegram_chat_id', $user->telegram_id)
+        if ($user->telegram_id || $user->telegram_username) {
+            // Find participations by telegram_chat_id OR telegram_username
+            $participations = Participant::where(function ($query) use ($user) {
+                if ($user->telegram_id) {
+                    $query->where('telegram_chat_id', $user->telegram_id);
+                }
+                if ($user->telegram_username) {
+                    $query->orWhere('telegram_username', strtolower($user->telegram_username));
+                }
+            })
                 ->with(['game.participants'])
                 ->get();
         }
 
         return view('game.my_games', compact('organizedGames', 'participations'));
+    }
+
+    public function myWishlist()
+    {
+        $user = auth()->user();
+
+        // Get all participations
+        $participations = [];
+        if ($user->telegram_id || $user->telegram_username) {
+            $participations = Participant::where(function ($query) use ($user) {
+                if ($user->telegram_id) {
+                    $query->where('telegram_chat_id', $user->telegram_id);
+                }
+                if ($user->telegram_username) {
+                    $query->orWhere('telegram_username', strtolower($user->telegram_username));
+                }
+            })
+                ->with('game')
+                ->get();
+        }
+
+        return view('game.my_wishlist', compact('participations'));
+    }
+
+    public function updateMyWishlist(Request $request)
+    {
+        $user = auth()->user();
+
+        // Update global shipping address
+        if ($request->has('shipping_address')) {
+            $user->update(['shipping_address' => $request->input('shipping_address')]);
+
+            // Also update all participants
+            Participant::where(function ($query) use ($user) {
+                if ($user->telegram_id) {
+                    $query->where('telegram_chat_id', $user->telegram_id);
+                }
+                if ($user->telegram_username) {
+                    $query->orWhere('telegram_username', strtolower($user->telegram_username));
+                }
+            })->update(['shipping_address' => $request->input('shipping_address')]);
+        }
+
+        // Update wishlists for each game
+        if ($request->has('wishlists')) {
+            foreach ($request->input('wishlists') as $participantId => $wishlistText) {
+                $participant = Participant::find($participantId);
+                if ($participant) {
+                    // Verify this participant belongs to the user
+                    $belongsToUser = ($user->telegram_id && $participant->telegram_chat_id == $user->telegram_id) ||
+                                     ($user->telegram_username && $participant->telegram_username == strtolower($user->telegram_username));
+
+                    if ($belongsToUser) {
+                        $participant->update(['wishlist_text' => $wishlistText]);
+                    }
+                }
+            }
+        }
+
+        return back()->with('success', __('wishlist.updated_successfully'));
     }
 
     public function showJoin($token)
@@ -319,13 +505,42 @@ class GameController extends Controller
 
         // Check if already joined
         $alreadyJoined = false;
+        $participant = null;
+        
         if (auth()->check()) {
-            $alreadyJoined = Participant::where('game_id', $game->id)
+            $participant = Participant::where('game_id', $game->id)
                 ->where('telegram_chat_id', auth()->user()->telegram_id)
-                ->exists();
+                ->first();
+                
+            $alreadyJoined = $participant !== null;
+
+            // Auto-join if logged in and not already joined
+            // BUT skip if user just left the game (to prevent auto-rejoin)
+            $justLeft = session()->pull('just_left_game_' . $game->id);
+
+            if (!$alreadyJoined && !$game->is_started && !$justLeft) {
+                $user = auth()->user();
+
+                // Create participant
+                $participant = Participant::create([
+                    'game_id' => $game->id,
+                    'name' => $user->telegram_username ?? $user->name,
+                    'telegram_chat_id' => $user->telegram_id,
+                    'telegram_username' => $user->telegram_username,
+                    'shipping_address' => $user->shipping_address,
+                    'language' => $user->language ?? 'uk',
+                    'pin_hash' => Hash::make(str_pad(random_int(0, 9999), 4, '0', STR_PAD_LEFT)),
+                    'reveal_token' => bin2hex(random_bytes(16)),
+                ]);
+
+                $alreadyJoined = true;
+
+                // Show success message
+                session()->flash('success', __('game.joined_successfully'));
+            }
         }
 
-        return view('game.join', compact('game', 'alreadyJoined'));
+        return view('game.join', compact('game', 'alreadyJoined', 'participant'));
     }
 
     public function join(Request $request, $token)
@@ -354,7 +569,7 @@ class GameController extends Controller
         // Create participant
         Participant::create([
             'game_id' => $game->id,
-            'name' => $user->name ?? $user->telegram_username,
+            'name' => $user->telegram_username ?? $user->name,
             'telegram_chat_id' => $user->telegram_id,
             'telegram_username' => $user->telegram_username,
             'shipping_address' => $user->shipping_address,
@@ -364,6 +579,36 @@ class GameController extends Controller
         ]);
 
         return redirect()->route('game.join', $token)->with('success', __('game.joined_successfully'));
+    }
+
+    public function leaveGame(Game $game)
+    {
+        if (!auth()->check()) {
+            return redirect()->route('game.join', $game->join_token)->withErrors(['error' => __('game.must_login')]);
+        }
+
+        // Can only leave if game hasn't started
+        if ($game->is_started) {
+            return back()->withErrors(['error' => __('game.cannot_leave_started')]);
+        }
+
+        $user = auth()->user();
+
+        // Find and delete participant
+        $participant = Participant::where('game_id', $game->id)
+            ->where('telegram_chat_id', $user->telegram_id)
+            ->first();
+
+        if ($participant) {
+            $participant->delete();
+
+            // Set flag to prevent auto-rejoin
+            session()->flash('just_left_game_' . $game->id, true);
+
+            return redirect()->route('game.join', $game->join_token)->with('success', __('game.left_successfully'));
+        }
+
+        return back()->withErrors(['error' => __('game.not_participant')]);
     }
 
     public function startGame(Game $game)

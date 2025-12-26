@@ -1,5 +1,36 @@
 @extends('layouts.app')
 
+@section('meta')
+    @php
+        // Use custom OG image if exists, otherwise use placeholder
+        $ogImage = file_exists(public_path('images/og-image.png'))
+            ? asset('images/og-image.png')
+            : 'https://placehold.co/1200x630/c41e3a/white?text=' . urlencode('🎅 ' . ($game->title ?? 'Secret Santa'));
+
+        // Build description with game info
+        $ogDescription = ($game->description ? $game->description . ' • ' : '') .
+                        __('game.login_to_join') .
+                        ($game->participants->count() > 0 ? ' • ' . $game->participants->count() . ' ' . __('game.joined') : '');
+    @endphp
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="{{ route('game.join', $game->join_token) }}">
+    <meta property="og:site_name" content="Secret Santa">
+    <meta property="og:title" content="🎅 {{ $game->title ?? 'Secret Santa' }}">
+    <meta property="og:description" content="{{ $ogDescription }}">
+    <meta property="og:image" content="{{ $ogImage }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="{{ route('game.join', $game->join_token) }}">
+    <meta property="twitter:title" content="🎅 {{ $game->title ?? 'Secret Santa' }}">
+    <meta property="twitter:description" content="{{ $ogDescription }}">
+    <meta property="twitter:image" content="{{ $ogImage }}">
+@endsection
+
 @section('content')
 <div class="max-w-2xl mx-auto py-8">
     <div class="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
@@ -7,7 +38,7 @@
             <div class="text-6xl mb-4">🎅</div>
             <h1 class="text-3xl font-display text-santa-dark mb-2">{{ $game->title ?? 'Secret Santa' }}</h1>
             @if($game->description)
-                <p class="text-gray-600 mt-2">{{ $game->description }}</p>
+                <p class="text-gray-600 mt-2 whitespace-pre-line">{{ $game->description }}</p>
             @endif
         </div>
 
@@ -50,8 +81,73 @@
                 {{ __('game.already_started') }}
             </div>
         @elseif($alreadyJoined)
-            <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-center">
+            <div class="bg-green-50 border border-green-200 text-green-800 px-4 py-3 rounded-lg text-center mb-4">
                 ✅ {{ __('game.you_already_joined') }}
+            </div>
+
+            <div class="bg-gradient-to-br from-santa-gold/10 to-santa-red/10 rounded-2xl p-6 mb-6 border-2 border-santa-gold shadow-lg">
+                <form action="{{ route('game.updateMyWishlist') }}" method="POST">
+                    @csrf
+
+                    <div class="mb-4">
+                        <label class="block text-lg font-bold text-santa-dark mb-3">
+                             🎁 {{ __('wishlist.your_wishlist_for_game') }}
+                        </label>
+                        <textarea
+                            name="wishlists[{{ $participant->id }}]"
+                            rows="4"
+                            class="w-full px-4 py-3 rounded-xl border-2 border-santa-gold/30 bg-white focus:ring-2 focus:ring-santa-gold focus:border-santa-gold outline-none transition-all"
+                            placeholder="{{ __('reveal_result.wishlist_placeholder') }}"
+                        >{{ old('wishlists.' . $participant->id, $participant->wishlist_text) }}</textarea>
+                        @if($participant->wishlist_text)
+                            <p class="text-sm text-green-700 mt-2 font-semibold">
+                                ✅ {{ __('wishlist.santa_will_see') }}
+                            </p>
+                        @else
+                            <p class="text-sm text-gray-600 mt-2">
+                                💡 {{ __('wishlist.add_wishlist_hint') }}
+                            </p>
+                        @endif
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="block text-lg font-bold text-santa-dark mb-3">
+                             📦 {{ __('reveal_result.your_address_label') }}
+                        </label>
+                        <textarea
+                            name="shipping_address"
+                            rows="3"
+                            class="w-full px-4 py-3 rounded-xl border-2 border-santa-gold/30 bg-white focus:ring-2 focus:ring-santa-gold focus:border-santa-gold outline-none transition-all"
+                            placeholder="{{ __('reveal_result.address_placeholder') }}"
+                        >{{ old('shipping_address', $participant->shipping_address) }}</textarea>
+                        @if($participant->shipping_address)
+                            <p class="text-sm text-green-700 mt-2 font-semibold">
+                                ✅ {{ __('wishlist.santa_will_see') }}
+                            </p>
+                        @else
+                            <p class="text-sm text-gray-600 mt-2">
+                                📍 {{ __('wishlist.add_address_hint') }}
+                            </p>
+                        @endif
+                    </div>
+
+                    <button type="submit" class="w-full bg-santa-gold hover:bg-yellow-500 text-white px-6 py-3 rounded-xl font-bold text-lg shadow-lg hover:shadow-xl transition-all transform hover:scale-105">
+                        💾 {{ __('result.save_btn') }}
+                    </button>
+                </form>
+            </div>
+
+            <div class="flex flex-col gap-3">
+                <a href="{{ route('game.myGames') }}" class="w-full text-center btn-primary px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all">
+                    {{ __('game.my_games_title') }}
+                </a>
+                <form action="{{ route('game.leave', $game->id) }}" method="POST" onsubmit="return confirm('{{ __('game.confirm_leave') }}')">
+                    @csrf
+                    @method('DELETE')
+                    <button type="submit" class="w-full bg-red-500 hover:bg-red-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg transition-colors">
+                        {{ __('game.leave_game') }}
+                    </button>
+                </form>
             </div>
         @elseif(auth()->check())
             <form action="{{ route('game.join.post', $game->join_token) }}" method="POST">
@@ -63,10 +159,13 @@
         @else
             <div class="text-center">
                 <p class="text-gray-600 mb-4">{{ __('game.login_to_join') }}</p>
-                <a href="{{ route('login.telegram') }}?redirect={{ urlencode(route('game.join', $game->join_token)) }}"
-                   class="inline-block btn-primary px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all">
-                    {{ __('auth.login_telegram') }}
-                </a>
+                <div class="flex justify-center">
+                    <script async src="https://telegram.org/js/telegram-widget.js?22"
+                        data-telegram-login="{{ env('TELEGRAM_BOT_USERNAME', 'little_santa_bot') }}"
+                        data-size="large"
+                        data-onauth="onTelegramAuth(user)"
+                        data-request-access="write"></script>
+                </div>
             </div>
         @endif
 
@@ -92,6 +191,23 @@ function copyLink() {
     input.select();
     document.execCommand('copy');
     alert('{{ __('game.link_copied') }}');
+}
+
+function onTelegramAuth(user) {
+    // Send auth data to server
+    const params = new URLSearchParams({
+        id: user.id,
+        first_name: user.first_name,
+        last_name: user.last_name || '',
+        username: user.username || '',
+        photo_url: user.photo_url || '',
+        auth_date: user.auth_date,
+        hash: user.hash,
+        redirect: '{{ route('game.join', $game->join_token) }}'
+    });
+
+    // Redirect to login endpoint with auth data
+    window.location.href = '{{ route('login.telegram') }}?' + params.toString();
 }
 </script>
 @endsection

@@ -57,10 +57,11 @@
                 <h3 class="text-lg font-bold text-gray-800 flex items-center">
                     <span class="mr-2">📝</span> {{ __('reveal_result.your_wishlist') }}
                 </h3>
-                <button @click="editing = !editing" 
+                <button @click="editing = !editing"
                     class="px-2 py-1 text-xs sm:px-3 sm:py-1.5 sm:text-sm font-semibold rounded-lg transition-colors cursor-pointer"
-                    :class="editing ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-santa-green text-white hover:bg-santa-dark'"
-                    x-text="editing ? __('reveal_result.cancel_btn') : '✏️ ' + __('reveal_result.edit_btn')">
+                    :class="editing ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-santa-green text-white hover:bg-santa-dark'">
+                    <span x-show="!editing">{{ __('reveal_result.edit_btn') }}</span>
+                    <span x-show="editing">{{ __('reveal_result.cancel_btn') }}</span>
                 </button>
             </div>
 

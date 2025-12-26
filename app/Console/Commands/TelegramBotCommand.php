@@ -150,6 +150,8 @@ class TelegramBotCommand extends Command
             $payload = trim(str_replace('/start', '', $text));
             if (str_starts_with($payload, 'auth_')) {
                 $this->handleAuthToken($chatId, $payload, $username);
+            } elseif (str_starts_with($payload, 'join_')) {
+                $this->handleJoinGame($chatId, $username, $payload);
             } else {
                 $this->handleStart($chatId, $username);
             }
@@ -256,14 +258,18 @@ class TelegramBotCommand extends Command
         if ($state === 'waiting_for_title') {
             Cache::put("bot_game_title_$chatId", $text, 3600);
             Cache::put("bot_state_$chatId", 'waiting_for_description', 3600);
-            $this->sendMessage($chatId, __('bot.create.title_success'), [["⏭ " . __('bot.menu.cancel')], [__('bot.menu.cancel')]]);
+            $this->sendMessage($chatId, __('bot.create.title_success'), [[__('bot.menu.skip')], [__('bot.menu.cancel')]]);
         } elseif ($state === 'waiting_for_description') {
-            $description = ($text === '-' || str_contains($text, __('bot.menu.cancel'))) ? null : $text;
+            $description = ($text === '-' || $this->matchCommand($text, 'bot.menu.skip')) ? null : $text;
             Cache::put("bot_game_description_$chatId", $description, 3600);
             Cache::put("bot_state_$chatId", 'waiting_for_participants', 3600);
-            $this->sendMessage($chatId, __('bot.create.description_success'), [[__('bot.menu.cancel')]]);
+            $this->sendMessage($chatId, __('bot.create.description_success'), [[__('bot.create.generate_invite')], [__('bot.menu.cancel')]]);
         } elseif ($state === 'waiting_for_participants') {
-            $this->createGameFromBot($chatId, $text);
+            if ($this->matchCommand($text, 'bot.create.generate_invite')) {
+                $this->createGameWithInviteLink($chatId);
+            } else {
+                $this->createGameFromBot($chatId, $text);
+            }
         } elseif ($state === 'waiting_for_game_selection') {
             $this->processGameSelection($chatId, $text);
         } elseif ($state === 'waiting_for_wishlist') {
@@ -295,6 +301,47 @@ class TelegramBotCommand extends Command
     {
         Cache::put("bot_state_$chatId", 'waiting_for_title', 3600);
         $this->sendMessage($chatId, __('bot.create.ask_title'), [[__('bot.menu.cancel')]]);
+    }
+
+    private function createGameWithInviteLink($chatId)
+    {
+        $title = Cache::get("bot_game_title_$chatId", "Secret Santa");
+        $description = Cache::get("bot_game_description_$chatId");
+
+        $game = Game::create([
+            'title' => $title,
+            'description' => $description,
+            'expires_at' => now()->addMonths(3),
+            'organizer_chat_id' => $chatId,
+        ]);
+
+        Cache::forget("bot_state_$chatId");
+        Cache::forget("bot_game_title_$chatId");
+        Cache::forget("bot_game_description_$chatId");
+
+        $escapedTitle = str_replace('_', '\\_', $title);
+        $joinLink = config('app.url') . "/game/join/{$game->join_token}";
+
+        $msg = str_replace('{title}', $escapedTitle, __('bot.game_created'));
+        $msg .= "\n\n" . __('bot.game.join_link_info');
+        $msg .= "\n" . $joinLink;
+        $msg .= "\n\n📤 Поділіться цим посиланням з учасниками! Вони зможуть приєднатися через веб-інтерфейс або бота.";
+
+        $buttons = [
+            'inline_keyboard' => [
+                [
+                    ['text' => __('bot.btn.view_participants'), 'web_app' => ['url' => config('app.url') . "/game/{$game->id}/edit"]]
+                ],
+                [
+                    ['text' => __('bot.btn.setup_constraints'), 'web_app' => ['url' => config('app.url') . "/game/{$game->id}/constraints"]]
+                ]
+            ]
+        ];
+
+        $this->sendMessage($chatId, $msg, $buttons);
+
+        // Send main menu after creating game
+        $this->sendMessage($chatId, __('bot.back_to_menu'));
     }
 
     private function createGameFromBot($chatId, $text)
@@ -351,15 +398,18 @@ class TelegramBotCommand extends Command
         $buttons = [
             'inline_keyboard' => [
                 [
-                    ['text' => __('bot.btn.view_participants'), 'url' => config('app.url') . "/game/{$game->id}/edit"]
+                    ['text' => __('bot.btn.view_participants'), 'web_app' => ['url' => config('app.url') . "/game/{$game->id}/edit"]]
                 ],
                 [
-                    ['text' => __('bot.btn.setup_constraints'), 'url' => config('app.url') . "/game/{$game->id}/constraints"]
+                    ['text' => __('bot.btn.setup_constraints'), 'web_app' => ['url' => config('app.url') . "/game/{$game->id}/constraints"]]
                 ]
             ]
         ];
 
         $this->sendMessage($chatId, $msg, $buttons);
+
+        // Send main menu after creating game
+        $this->sendMessage($chatId, __('bot.back_to_menu'));
     }
 
     private function handleNotify($chatId, $gameId = null)
@@ -420,7 +470,7 @@ class TelegramBotCommand extends Command
                 $buttons = [
                     'inline_keyboard' => [
                         [
-                            ['text' => '🎁 Відкрити результат', 'url' => $link]
+                            ['text' => '🎁 Відкрити результат', 'web_app' => ['url' => $link]]
                         ]
                     ]
                 ];
@@ -521,8 +571,6 @@ class TelegramBotCommand extends Command
             $msg .= "\n";
         }
 
-        $buttons = [];
-
         if ($participatingIn->isNotEmpty()) {
             $msg .= __('bot.my_games.participating') . "\n";
             foreach ($participatingIn as $p) {
@@ -532,26 +580,21 @@ class TelegramBotCommand extends Command
                 $title = str_replace('_', '\\_', $game->title);
                 $giftText = str_replace('{santaFor}', $santaFor, __('bot.my_games.you_gift'));
                 $msg .= "▫️ *$title* ($giftText)\n";
-
-                if ($p->assignmentAsSanta) {
-                    $token = $p->reveal_token;
-                    if (!$token) {
-                        $token = bin2hex(random_bytes(16));
-                        $p->update(['reveal_token' => $token]);
-                    }
-                    $link = config('app.url') . "/reveal/{$game->id}/{$p->id}/{$token}";
-                    $buttons[] = [['text' => "🎁 " . $game->title, 'url' => $link]];
-                }
             }
         }
 
-        $options = [];
-        if (!empty($buttons)) {
-            $options['inline_keyboard'] = $buttons;
-        }
+        $msg .= "\n\n" . __('bot.my_games.open_app_info');
 
-        \Log::info("About to send my_games message with " . count($buttons) . " buttons");
-        $this->sendMessage($chatId, $msg, $options);
+        $buttons = [
+            'inline_keyboard' => [
+                [
+                    ['text' => '📋 ' . __('bot.my_games.open_list'), 'web_app' => ['url' => config('app.url') . '/my-games']]
+                ]
+            ]
+        ];
+
+        \Log::info("About to send my_games message with open list button");
+        $this->sendMessage($chatId, $msg, $buttons);
     }
 
     private function handleWho($chatId)
@@ -609,7 +652,7 @@ class TelegramBotCommand extends Command
             $buttons = [
                 'inline_keyboard' => [
                     [
-                        ['text' => __('bot.btn.open_card'), 'url' => $link]
+                        ['text' => __('bot.btn.open_card'), 'web_app' => ['url' => $link]]
                     ]
                 ]
             ];
@@ -700,7 +743,7 @@ class TelegramBotCommand extends Command
         $msg .= "\n\nНапишіть нову адресу (ПІБ, телефон, місто, НП) або натисніть «🔙 Назад»:";
 
         Cache::put("bot_state_$chatId", 'waiting_for_shipping_address', 3600);
-        $this->sendMessage($chatId, $msg, [["🔙 Назад"]]);
+        $this->sendMessage($chatId, $msg, [[__('bot.menu.back')]]);
     }
 
     private function updateShippingAddressFromBot($chatId, $text)
@@ -1324,7 +1367,7 @@ class TelegramBotCommand extends Command
         $buttons = [
             'inline_keyboard' => [
                 [
-                    ['text' => '⚙️ Налаштувати обмеження', 'url' => $link]
+                    ['text' => '⚙️ Налаштувати обмеження', 'web_app' => ['url' => $link]]
                 ]
             ]
         ];
@@ -1464,5 +1507,74 @@ class TelegramBotCommand extends Command
         Cache::forget("bot_setting_budget_{$chatId}_{$gameId}");
 
         $this->sendMessage($chatId, "✅ Бюджет оновлено!");
+    }
+
+    private function handleJoinGame($chatId, $username, $payload)
+    {
+        // Extract join token from payload (format: join_TOKEN)
+        $joinToken = str_replace('join_', '', $payload);
+
+        if (empty($joinToken)) {
+            $this->handleStart($chatId, $username);
+            return;
+        }
+
+        // Find game by join token
+        $game = Game::where('join_token', $joinToken)->first();
+
+        if (!$game) {
+            $this->sendMessage($chatId, __('bot.game_not_found'));
+            $this->handleStart($chatId, $username);
+            return;
+        }
+
+        // Check if game already started
+        if ($game->is_started) {
+            $this->sendMessage($chatId, __('game.already_started'));
+            $this->handleStart($chatId, $username);
+            return;
+        }
+
+        // Check if user already joined
+        $existing = Participant::where('game_id', $game->id)
+            ->where('telegram_chat_id', $chatId)
+            ->first();
+
+        if ($existing) {
+            $this->sendMessage($chatId, __('game.already_joined'));
+            $this->handleStart($chatId, $username);
+            return;
+        }
+
+        // Find or create User record
+        $user = \App\Models\User::where('telegram_id', $chatId)->first();
+        if (!$user && $username) {
+            $user = \App\Models\User::firstOrCreate(
+                ['telegram_username' => $username],
+                [
+                    'telegram_id' => $chatId,
+                    'language' => $this->resolveLocale($chatId, $username),
+                ]
+            );
+        } elseif ($user && !$user->telegram_id) {
+            $user->update(['telegram_id' => $chatId]);
+        }
+
+        // Create participant
+        $participant = Participant::create([
+            'game_id' => $game->id,
+            'name' => $username,
+            'telegram_chat_id' => $chatId,
+            'telegram_username' => $username,
+            'shipping_address' => $user->shipping_address ?? null,
+            'language' => $user->language ?? $this->resolveLocale($chatId, $username),
+            'reveal_token' => bin2hex(random_bytes(16)),
+        ]);
+
+        $gameTitle = $game->title ?? 'Secret Santa';
+        $msg = "🎉 " . __('game.joined_successfully') . "\n\n";
+        $msg .= "🎮 " . __('bot.game.notification', ['title' => $gameTitle]);
+
+        $this->sendMessage($chatId, $msg, $this->getMainMenu());
     }
 }

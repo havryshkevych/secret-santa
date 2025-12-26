@@ -11,14 +11,15 @@ class AuthController extends Controller
     public function telegramLogin(Request $request)
     {
         $auth_data = $request->all();
+        $redirectUrl = $request->input('redirect', route('home'));
 
         if ($this->checkTelegramAuthorization($auth_data)) {
             $this->loginWithTelegramData($auth_data);
 
-            return redirect()->route('home');
+            return redirect($redirectUrl);
         }
 
-        return redirect()->route('home')->withErrors(['auth' => 'Telegram authorization failed.']);
+        return redirect($redirectUrl)->withErrors(['auth' => 'Telegram authorization failed.']);
     }
 
     public function webAppLogin(Request $request)
@@ -102,10 +103,14 @@ class AuthController extends Controller
         }
 
         $check_hash = $auth_data['hash'];
-        unset($auth_data['hash']);
+
+        // Remove non-Telegram fields from validation
+        $telegram_data = $auth_data;
+        unset($telegram_data['hash']);
+        unset($telegram_data['redirect']); // Don't include redirect in hash validation
 
         $data_check_arr = [];
-        foreach ($auth_data as $key => $value) {
+        foreach ($telegram_data as $key => $value) {
             $data_check_arr[] = $key.'='.$value;
         }
         sort($data_check_arr);
@@ -119,7 +124,7 @@ class AuthController extends Controller
             return false;
         }
 
-        if ((time() - $auth_data['auth_date']) > 86400) {
+        if (isset($telegram_data['auth_date']) && (time() - $telegram_data['auth_date']) > 86400) {
             return false;
         }
 

@@ -18,6 +18,15 @@ class RevealController extends Controller
             ->where('reveal_token', $token)
             ->firstOrFail();
 
+        // Check if participant has Telegram (chat_id or username)
+        $hasTelegram = !empty($participant->telegram_chat_id) || !empty($participant->telegram_username);
+
+        // If participant does NOT have Telegram, allow direct access via token
+        if (!$hasTelegram) {
+            return $this->showRevealResult($participant, $gameId, $token);
+        }
+
+        // If participant HAS Telegram, require authentication
         // Check if already authenticated via Telegram session (Redirect from bot)
         $telegramAuthKey = 'telegram_auth:'.$participant->id;
         $isTelegramAuthed = Cache::get($telegramAuthKey) === true;
@@ -46,6 +55,7 @@ class RevealController extends Controller
             return $this->showRevealResult($participant, $gameId, $token);
         }
 
+        // Not authenticated but has Telegram - show login page
         // Generate Telegram auth token for this session (for linking)
         $authToken = Str::random(32);
         Cache::put('telegram_reveal_token:'.$authToken, [

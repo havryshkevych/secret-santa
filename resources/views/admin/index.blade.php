@@ -103,17 +103,17 @@
     </div>
 
     <!-- Delete Confirmation Modal -->
-    <div x-show="showDeleteModal" 
+    <div x-show="showDeleteModal"
          x-transition:enter="transition ease-out duration-200"
          x-transition:enter-start="opacity-0"
          x-transition:enter-end="opacity-100"
          x-transition:leave="transition ease-in duration-150"
          x-transition:leave-start="opacity-100"
          x-transition:leave-end="opacity-0"
-         class="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm"
+         class="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-sm"
          @keydown.escape.window="showDeleteModal = false"
          style="display: none;">
-        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 text-center"
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md mx-4 text-center opacity-100"
              @click.outside="showDeleteModal = false">
              <div class="text-6xl mb-4">⚠️</div>
             <h3 class="text-xl font-bold text-gray-800 mb-2">{{ __('admin.delete_modal_title') }}</h3>
