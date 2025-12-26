@@ -29,7 +29,13 @@ class TelegramBotCommand extends Command
         }
 
         $this->info('Secret Santa Bot is running...');
-        $this->setBotCommands();
+
+        try {
+            $this->setBotCommands();
+        } catch (\Exception $e) {
+            $this->warn('Could not set bot commands: ' . $e->getMessage());
+            $this->warn('Bot will continue running without custom commands.');
+        }
 
         while (true) {
             try {
@@ -68,15 +74,23 @@ class TelegramBotCommand extends Command
         }
     }
 
+    /**
+     * Helper method for making Telegram API calls with timeout
+     */
+    private function telegramApi($method, $params = [])
+    {
+        return Http::timeout(10)->post("https://api.telegram.org/bot{$this->token}/{$method}", $params);
+    }
+
     private function setBotCommands()
     {
         // Clear commands list to remove the / menu
-        Http::post("https://api.telegram.org/bot{$this->token}/deleteMyCommands");
+        $this->telegramApi('deleteMyCommands');
 
         // Set the Menu Button to open the Mini App (only if HTTPS)
         $appUrl = config('app.url');
         if (str_starts_with($appUrl, 'https://')) {
-            Http::post("https://api.telegram.org/bot{$this->token}/setChatMenuButton", [
+            $this->telegramApi('setChatMenuButton', [
                 'menu_button' => [
                     'type' => 'web_app',
                     'text' => '🎁 Open',
@@ -1040,7 +1054,7 @@ class TelegramBotCommand extends Command
         // Just in case, ensure we don't have unescaped underscores that break everything
         // but we've already tried to escape them where they occur.
 
-        $response = Http::post("https://api.telegram.org/bot{$this->token}/sendMessage", [
+        $response = $this->telegramApi('sendMessage', [
             'chat_id' => $chatId,
             'text' => $text,
             'parse_mode' => 'Markdown',

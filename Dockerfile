@@ -10,7 +10,11 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     libpq-dev \
-    libsqlite3-dev
+    libsqlite3-dev \
+    ca-certificates
+
+# Update CA certificates
+RUN update-ca-certificates
 
 # Clear cache
 RUN apt-get clean && rm -rf /var/lib/apt/lists/*
