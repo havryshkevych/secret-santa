@@ -237,19 +237,23 @@ class TelegramBotCommand extends Command
             App::setLocale($lang);
 
             // Answer query
-            Http::post("https://api.telegram.org/bot{$this->token}/answerCallbackQuery", [
+            $this->telegramApi('answerCallbackQuery', [
                 'callback_query_id' => $query['id'],
                 'text' => $lang == 'uk' ? 'Мову змінено!' : 'Language updated!'
             ]);
 
             // Delete selection message
-            Http::post("https://api.telegram.org/bot{$this->token}/deleteMessage", [
+            $this->telegramApi('deleteMessage', [
                 'chat_id' => $chatId,
                 'message_id' => $query['message']['message_id']
             ]);
 
-            // Show welcome or return to settings
-            if (Cache::get("bot_editing_lang_$chatId")) {
+            // Check if user was in the middle of joining a game
+            $pendingJoin = Cache::get("bot_pending_join_$chatId");
+            if ($pendingJoin) {
+                Cache::forget("bot_pending_join_$chatId");
+                $this->handleJoinGame($chatId, $username, $pendingJoin);
+            } elseif (Cache::get("bot_editing_lang_$chatId")) {
                 Cache::forget("bot_editing_lang_$chatId");
                 $this->handleSettings($chatId);
             } else {
@@ -1542,6 +1546,21 @@ class TelegramBotCommand extends Command
 
             if (empty($joinToken)) {
                 $this->handleStart($chatId, $username);
+                return;
+            }
+
+            // Check if user has language set, if not - ask for it first
+            $user = \App\Models\User::where('telegram_id', $chatId)->first();
+            if (!$user && $username) {
+                $user = \App\Models\User::where('telegram_username', $username)->first();
+            }
+
+            $currentLang = $user->language ?? Participant::where('telegram_chat_id', $chatId)->value('language');
+
+            if (!$currentLang) {
+                // Save the pending join to continue after language selection
+                Cache::put("bot_pending_join_$chatId", $payload, 3600);
+                $this->askLanguage($chatId);
                 return;
             }
 
