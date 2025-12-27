@@ -12,6 +12,7 @@ class ParticipantSecurityTest extends TestCase
 {
     use RefreshDatabase;
 
+
     /** @test */
     public function user_with_telegram_id_sees_only_their_own_participant_data()
     {
@@ -130,7 +131,9 @@ class ParticipantSecurityTest extends TestCase
 
         // User1 tries to update Bob's wishlist by manipulating the participant ID
         $this->actingAs($user1)
+            ->withSession(['_token' => 'test-token'])
             ->post(route('game.updateMyWishlist'), [
+                '_token' => 'test-token',
                 'wishlists' => [
                     $participant2->id => 'Hacked wishlist',
                 ],
@@ -144,7 +147,9 @@ class ParticipantSecurityTest extends TestCase
 
         // User1 can update their own wishlist
         $this->actingAs($user1)
+            ->withSession(['_token' => 'test-token'])
             ->post(route('game.updateMyWishlist'), [
+                '_token' => 'test-token',
                 'wishlists' => [
                     $participant1->id => 'Updated Alice wishlist',
                 ],
@@ -187,7 +192,9 @@ class ParticipantSecurityTest extends TestCase
 
         // User1 updates their shipping address
         $this->actingAs($user1)
+            ->withSession(['_token' => 'test-token'])
             ->post(route('game.updateMyWishlist'), [
+                '_token' => 'test-token',
                 'shipping_address' => 'Alice new address',
             ]);
 
@@ -225,7 +232,9 @@ class ParticipantSecurityTest extends TestCase
 
         // User tries to update
         $this->actingAs($user)
+            ->withSession(['_token' => 'test-token'])
             ->post(route('game.updateMyWishlist'), [
+                '_token' => 'test-token',
                 'shipping_address' => 'Hacked address',
             ]);
 
@@ -256,7 +265,8 @@ class ParticipantSecurityTest extends TestCase
 
         // User1 leaves the game
         $this->actingAs($user1)
-            ->delete(route('game.leave', $game));
+            ->withSession(['_token' => 'test-token'])
+            ->delete(route('game.leave', $game), ['_token' => 'test-token']);
 
         // Only participant1 should be deleted
         $this->assertDatabaseMissing('participants', ['id' => $participant1->id]);

@@ -64,10 +64,10 @@
 
             @if($game->participants->count() > 0)
                 <div class="space-y-2">
-                    @foreach($game->participants as $participant)
+                    @foreach($game->participants as $p)
                         <div class="flex items-center gap-2 text-sm text-gray-700">
                             <span>✓</span>
-                            <span>{{ $participant->name }}</span>
+                            <span>{{ $p->name }}</span>
                         </div>
                     @endforeach
                 </div>
