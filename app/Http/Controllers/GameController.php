@@ -533,12 +533,24 @@ class GameController extends Controller
         // Check if already joined
         $alreadyJoined = false;
         $participant = null;
-        
+
         if (auth()->check()) {
-            $participant = Participant::where('game_id', $game->id)
-                ->where('telegram_chat_id', auth()->user()->telegram_id)
-                ->first();
-                
+            $user = auth()->user();
+
+            // Find participant - prefer telegram_chat_id match, fallback to username
+            if ($user->telegram_id) {
+                // If user has telegram_id, match by telegram_chat_id
+                $participant = Participant::where('game_id', $game->id)
+                    ->where('telegram_chat_id', $user->telegram_id)
+                    ->first();
+            } elseif ($user->telegram_username) {
+                // Fallback: match by username (only if telegram_id is not set)
+                $participant = Participant::where('game_id', $game->id)
+                    ->where('telegram_username', $user->telegram_username)
+                    ->whereNull('telegram_chat_id') // Only match participants without telegram_chat_id
+                    ->first();
+            }
+
             $alreadyJoined = $participant !== null;
 
             // Auto-join if logged in and not already joined
@@ -584,10 +596,19 @@ class GameController extends Controller
 
         $user = auth()->user();
 
-        // Check if already joined
-        $existing = Participant::where('game_id', $game->id)
-            ->where('telegram_chat_id', $user->telegram_id)
-            ->first();
+        // Check if already joined - same logic as showJoin
+        if ($user->telegram_id) {
+            $existing = Participant::where('game_id', $game->id)
+                ->where('telegram_chat_id', $user->telegram_id)
+                ->first();
+        } elseif ($user->telegram_username) {
+            $existing = Participant::where('game_id', $game->id)
+                ->where('telegram_username', $user->telegram_username)
+                ->whereNull('telegram_chat_id')
+                ->first();
+        } else {
+            $existing = null;
+        }
 
         if ($existing) {
             return redirect()->route('game.join', $token)->with('success', __('game.already_joined'));
@@ -621,10 +642,19 @@ class GameController extends Controller
 
         $user = auth()->user();
 
-        // Find and delete participant
-        $participant = Participant::where('game_id', $game->id)
-            ->where('telegram_chat_id', $user->telegram_id)
-            ->first();
+        // Find participant - same logic as showJoin
+        if ($user->telegram_id) {
+            $participant = Participant::where('game_id', $game->id)
+                ->where('telegram_chat_id', $user->telegram_id)
+                ->first();
+        } elseif ($user->telegram_username) {
+            $participant = Participant::where('game_id', $game->id)
+                ->where('telegram_username', $user->telegram_username)
+                ->whereNull('telegram_chat_id')
+                ->first();
+        } else {
+            $participant = null;
+        }
 
         if ($participant) {
             $participant->delete();
