@@ -496,15 +496,17 @@ class GameController extends Controller
         if ($request->has('shipping_address')) {
             $user->update(['shipping_address' => $request->input('shipping_address')]);
 
-            // Also update all participants
-            Participant::where(function ($query) use ($user) {
-                if ($user->telegram_id) {
-                    $query->where('telegram_chat_id', $user->telegram_id);
-                }
-                if ($user->telegram_username) {
-                    $query->orWhere('telegram_username', strtolower($user->telegram_username));
-                }
-            })->update(['shipping_address' => $request->input('shipping_address')]);
+            // Also update all participants - use safe matching logic
+            if ($user->telegram_id) {
+                // If user has telegram_id, update by telegram_chat_id
+                Participant::where('telegram_chat_id', $user->telegram_id)
+                    ->update(['shipping_address' => $request->input('shipping_address')]);
+            } elseif ($user->telegram_username) {
+                // If no telegram_id, update by username but ONLY where telegram_chat_id is null
+                Participant::where('telegram_username', strtolower($user->telegram_username))
+                    ->whereNull('telegram_chat_id')
+                    ->update(['shipping_address' => $request->input('shipping_address')]);
+            }
         }
 
         // Update wishlists for each game
@@ -512,9 +514,17 @@ class GameController extends Controller
             foreach ($request->input('wishlists') as $participantId => $wishlistText) {
                 $participant = Participant::find($participantId);
                 if ($participant) {
-                    // Verify this participant belongs to the user
-                    $belongsToUser = ($user->telegram_id && $participant->telegram_chat_id == $user->telegram_id) ||
-                                     ($user->telegram_username && $participant->telegram_username == strtolower($user->telegram_username));
+                    // Verify this participant belongs to the user - strict matching
+                    $belongsToUser = false;
+
+                    if ($user->telegram_id) {
+                        // If user has telegram_id, participant must have matching telegram_chat_id
+                        $belongsToUser = $participant->telegram_chat_id == $user->telegram_id;
+                    } elseif ($user->telegram_username) {
+                        // If no telegram_id, match by username AND participant must NOT have telegram_chat_id
+                        $belongsToUser = ($participant->telegram_username == strtolower($user->telegram_username) &&
+                                         $participant->telegram_chat_id === null);
+                    }
 
                     if ($belongsToUser) {
                         $participant->update(['wishlist_text' => $wishlistText]);
